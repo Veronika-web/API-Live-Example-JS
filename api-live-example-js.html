@@ -155,7 +155,7 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="#">Social media aggregator</a>
+          <a class="navbar-brand" href="https://www.socialmediawall.io">Social media aggregator</a>
         </div>
         <div id="navbar" class="navbar-collapse collapse">
           <form class="navbar-form navbar-right" role="form">
@@ -169,8 +169,8 @@
     <div class="jumbotron">
       <div class="container">
         <h1>Hello, world!</h1>
-        <p>This is a simple one page example that uses social media wall API from Javascript to load an API enabled test social wall.</p>
-        <p><a class="btn btn-primary btn-lg" href="https://www.socialmediawall.io/developer" role="button">Learn more &raquo;</a></p>
+        <p>This is a simple one page example that uses social media wall API. The page calls the <a href="https://www.socialmediawall.io/developer">API</a> from Javascript to load an API enabled test social wall.</p>
+        <p><a class="btn btn-primary btn-lg" href="https://www.socialmediawall.io/developer" role="button">Learn more</a></p>
       </div>
     </div>
 
@@ -184,7 +184,10 @@
             </div>
       </div>
       <div class="row text-center">
-      <div class="btn btn-primary btn-lg" id="load-more-btn">Load More</div>
+      <div class="btn btn-primary btn-lg" id="load-more-btn">Load more</div>
+      </div>
+      <div class="row text-center">
+      <div class="btn btn-primary btn-lg" id="loading-more-btn">Loading...</div>
       </div>
     </div>
 
@@ -193,6 +196,7 @@
     <script>
 	var hasMore = 0;
 	var offset = 0;
+	var limit = 10;
 	add_posts();
     function format_date(date) {
       var monthNames = [
@@ -215,51 +219,142 @@
         }
         return ret;
     }
+    function get_valid_image_posts(posts, cb, cbarg){
+
+        var postimages = [];
+        var validposts = [];
+        var origpostorder = [];
+
+        for(var index = 0; index < posts.length; ++index) {
+            validposts.push(null);
+            var postobj = posts[index];
+
+            if (postobj.imagelink) {
+                postimages.push(postobj.imagelink);
+                origpostorder.push(index);
+                imagesExist = true;
+            }
+        }
+
+        var promises = [];
+        var total = 0;
+
+        for (var index = 0; index < postimages.length; index++) {
+            (function(url, promise, pos) {
+                var img = new Image();
+                img.onload = function() {
+                    total++;
+                    validposts[ pos ] = posts[ pos ];
+                    promise.resolve();
+                };
+                img.onerror = function() {
+                    total++;
+                    promise.resolve();
+                };
+                img.src = url;
+            })(postimages[index], promises[index] = $.Deferred(), origpostorder[index]);
+        }
+
+
+
+        $.when.apply($, promises).done(function() {
+            if (total >= postimages.length) {
+                var trimvalidposts = [];
+                for (var i=0; i<validposts.length; i++) {
+                    if (validposts[i]) {
+                        trimvalidposts.push(validposts[i]);
+                    }
+                }
+                cb(trimvalidposts, cbarg);
+                return;
+            }
+        });
+    }
+
+    function show_posts(posts, json) {
+        for (var i = 0; i < posts.length; i++) {
+            if (posts[i]["authorimage"] != undefined) {
+                $(".posts").append(
+                  '<a class="link" target="_blank" href="' +
+                    posts[i]["sourcelink"] +
+                  '">' +
+                    '<div class="wall-post">' +
+                      '<div class="wall-post-header">' +
+                        '<div class="text"> ' +
+                          '<span class="fa fa-' +
+                            posts[i]["source"] +
+                          '" aria-hidden="true"> </span>' +
+                          '<span>' +
+                            posts[i]["authorname"]+
+                          '</span>' +
+                        '</div>' +
+                        '<span class="wall-post-time">' +
+                          format_date(new Date(posts[i]["creationtime"])) +
+                        '</span>' +
+                      '</div>' +
+
+                      '<div class="wall-post-hr"></div>' +
+
+                      '<div class="wall-post-text">' +
+                        '<p>' +
+                          shorten_text(posts[i]["text"], 300) +
+                        '</p>' +
+                      '</div>' +
+
+                      '<div class="wall-post-media" style="background-image: url(\'' +
+                        posts[i]["imagelink"] +
+                      '\')"></div>' +
+                    '</div>' +
+                  '</a>'
+                );
+            }
+        }
+
+        if (posts.length <= 0) {
+            if(hasMore == "true"){
+                offset += limit;
+                add_posts();
+            }
+        } else {
+            $('#loading-more-btn').hide();
+            $('#load-more-btn').show();
+        }
+    }
+
 	function add_posts(){
+	    $('#load-more-btn').hide();
+	    $('#loading-more-btn').show();
+	    //var api_end_point = "https://www.socialmediawall.io:3443/api/v1.1/";
+	    //var wall_id = "108";
+	    //var app_id = "1b566d9ffa4e41938cea056533ef16f1";
+	    //var app_secret = "5bcbadfc738e4b37b27c99d44e7e1945";
+
+	    var api_end_point = "https://www.socialmediawall.io/api/v1.1/";
+	    var wall_id = "12077";
+	    var app_id = "f0afca337586413cae1e68689d5f50b5";
+	    var app_secret = "abb10a6046d145b0be5e1d417a7f686b";
+
+        var url = api_end_point +
+                    wall_id +
+                    "/posts/?" +
+                    "app_id=" + app_id +
+                    "&app_secret=" + app_secret +
+                    "&offset=" + offset +
+                    "&limit=" + limit +
+                    "&include_only_image_posts=true";
+
+        console.log(url);
+
 		$.get(
-			"https://www.socialmediawall.io/api/v1.1/12077/posts/?app_id=f0afca337586413cae1e68689d5f50b5&app_secret=abb10a6046d145b0be5e1d417a7f686b&offset="+offset+"&limit=24",
+			url,
 			function(data) {
 				var obj = JSON.stringify(data);
 				var obj = JSON.parse(obj);
 
 				hasMore = obj["data"]["hasMore"];
-				for (var i = 0; i < obj["data"]["posts"].length; i++) {
-					if (obj["data"]["posts"][i]["authordata"]["imagelink"] != undefined) {
-						$(".posts").append(
-						  '<a class="link" target="_blank" href="' +
-						    obj["data"]["posts"][i]["sourcelink"] +
-						  '">' +
-						    '<div class="wall-post">' +
-						      '<div class="wall-post-header">' +
-                                '<div class="text"> ' +
-                                  '<span class="fa fa-' +
-                                    obj["data"]["posts"][i]["source"] +
-                                  '" aria-hidden="true"> </span>' +
-                                  '<span>' +
-                                    obj["data"]["posts"][i]["authordata"]["full_name"]+
-                                  '</span>' +
-                                '</div>' +
-                                '<span class="wall-post-time">' +
-                                  format_date(new Date(obj["data"]["posts"][i]["creationtime"])) +
-                                '</span>' +
-                              '</div>' +
 
-                              '<div class="wall-post-hr"></div>' +
+				get_valid_image_posts(obj["data"]["posts"], show_posts, obj);
 
-                              '<div class="wall-post-text">' +
-                                '<p>' +
-                                  shorten_text(obj["data"]["posts"][i]["text"], 300) +
-                                '</p>' +
-                              '</div>' +
-
-                              '<div class="wall-post-media" style="background-image: url(\'' +
-                                obj["data"]["posts"][i]["imagelink"] +
-                              '\')"></div>' +
-                            '</div>' +
-                          '</a>'
-                        );
-					}
-				}
 			}
 		);
 	}
@@ -267,9 +362,10 @@
 
 	$('#load-more-btn').click(function(){
         if(hasMore == "true"){
-            hasMore == "false"
-            offset += 24;
+            offset += limit;
             add_posts();
+        } else {
+            $('#load-more-btn').hide();
         }
     });
     </script>
